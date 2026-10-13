@@ -144,6 +144,7 @@ ul.clean li{margin:2px 0}
 .svc.off{opacity:.55}
 .svc .nm{flex:1;min-width:0}
 .svc .nm b{font-weight:500}
+.rulebtn{width:24px;height:24px;border:0;padding:0;background:transparent;color:var(--accent);border-radius:50%;display:inline-grid;place-items:center;cursor:pointer;vertical-align:middle}.rulebtn:hover{background:var(--accent-soft)}.rulebtn svg{width:16px;height:16px}
 .svc .nm .small{display:block;color:var(--muted)}
 .svc .amt{font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right;min-width:96px}
 .svc + .svc{margin-top:2px}
@@ -1222,7 +1223,7 @@ function simServicesHTML(r) {
     const badges = [s.mandatory ? `<span class="badge mand">${ic('lock')}Obrigatório</span>` : '', s.default && !s.mandatory ? '<span class="badge">Padrão</span>' : '', s.origin === 'adicional' ? '<span class="badge" style="background:#7C3AED1f;color:#7C3AED">Adicional</span>' : '', ['NA','NAO_COBRAVEL','ESPECIAL'].includes(sv.cls) ? clsBadge(sv.cls) : ''].join(' ');
     const why = !s.applicable ? `<span class="small">Não se aplica a esta simulação · ${esc(condText(s.cond))}</span>` : `<span class="small">${esc(sv.code)} · ${esc(BASES[sv.basis].label)}${s.cond ? ' · ' + esc(condText(s.cond)) : ''}${s.mult > 1 ? ' · ×' + s.mult : ''}</span>`;
     const dis = s.mandatory || !s.applicable && !s.selected ? '' : '';
-    return `<div class="svc ${s.mandatory ? 'mand' : ''} ${!s.selected ? 'off' : ''}"><input type="checkbox" data-act="svcToggle" data-svc="${s.svc}" ${s.selected ? 'checked' : ''} ${s.mandatory || !can('simular') ? 'disabled' : ''} ${dis} aria-label="Incluir ${esc(sv.name)}" style="width:18px;height:18px;accent-color:var(--accent)"><span class="nm"><b>${esc(sv.name)}</b> ${badges}${why}</span>${disc}<span class="amt" data-amt="${s.svc}">${amt}</span>${s.origin === 'adicional' && can('simular') ? `<button class="iconbtn" data-act="svcRemoveExtra" data-svc="${s.svc}" title="Remover serviço adicional" aria-label="Remover ${esc(sv.name)}">${ic('close')}</button>` : ''}</div>`;
+    return `<div class="svc ${s.mandatory ? 'mand' : ''} ${!s.selected ? 'off' : ''}"><input type="checkbox" data-act="svcToggle" data-svc="${s.svc}" ${s.selected ? 'checked' : ''} ${s.mandatory || !can('simular') ? 'disabled' : ''} ${dis} aria-label="Incluir ${esc(sv.name)}" style="width:18px;height:18px;accent-color:var(--accent)"><span class="nm"><b>${esc(sv.name)}</b> ${ruleBtn(s.svc, sv.name)} ${badges}${why}</span>${disc}<span class="amt" data-amt="${s.svc}">${amt}</span>${s.origin === 'adicional' && can('simular') ? `<button class="iconbtn" data-act="svcRemoveExtra" data-svc="${s.svc}" title="Remover serviço adicional" aria-label="Remover ${esc(sv.name)}">${ic('close')}</button>` : ''}</div>`;
   };
   const mem = r.sel.filter(s => s.origin === 'grupo'), ext = r.sel.filter(s => s.origin === 'adicional');
   const cats = [...new Set(mem.map(s => (svcBy(s.svc) || {}).category))];
@@ -1249,6 +1250,68 @@ function svcAmtHTML(s, l) {
   if (l.amount == null) return `<span class="badge neg">${esc(l.rule || 'Sem tarifa')}</span>`;
   return `${l.discPct ? `<s class="muted small">${brl(l.preDisc)}</s><br>` : ''}${brl(l.amount)}${l.adjusted ? ' <span class="badge warn">ajustado</span>' : ''}`;
 }
+// Botão "regra de cálculo" em cada serviço: mostra como o serviço é calculado (regra geral do cadastro)
+// e, quando o serviço está na simulação atual, a memória de cálculo com os números aplicados
+const ruleBtn = (code, name) => `<button type="button" class="rulebtn" data-act="svcRule" data-svc="${esc(code)}" title="Consultar a regra de cálculo" aria-label="Regra de cálculo de ${esc(name)}">${ic('info')}</button>`;
+function periodRuleTxt(rule) {
+  if (!rule || rule.type === 'simples') return '';
+  if (rule.type === 'periodo') return `Período de armazenagem: dias ${rule.from} a ${rule.to}. Cobra uma vez quando a armazenagem chega ao ${rule.from}º dia${rule.from === 1 ? ' (sempre cobra)' : ''}.`;
+  if (rule.type === 'diario') return `Cobrança diária a partir do ${rule.from}º dia: multiplica pelo número de dias contados desse dia em diante.`;
+  if (rule.type === 'cada_n') return `Cobra a cada ${rule.n} dias: multiplica pelo número de períodos de ${rule.n} dias (arredondado para cima, mínimo 1).`;
+  return '';
+}
+function basisRuleTxt(sv) {
+  const qlbl = { CONTAINER:'quantidade de containers', VEICULO:'quantidade de veículos', AWB:'quantidade de AWBs' };
+  switch (sv.basis) {
+    case 'CIF': case 'CIF_DIA': return 'Percentual da tarifa × valor CIF em R$. Se o CIF foi informado por unidade, usa CIF da unidade × quantidade. Moeda estrangeira é convertida pelo câmbio informado.';
+    case 'VALOR_CARGA': return 'Percentual da tarifa × valor da carga informado.';
+    case 'CNTR_DIA': return 'Tarifa × quantidade de containers × dias de armazenagem.';
+    case 'PROCESSO': return 'Tarifa × número de processos.';
+    case 'PALLET': return 'Tarifa × número de pallets.';
+    case 'CAIXA': return 'Tarifa × número de caixas/volumes.';
+    case 'POSICAO_Q': return `Tarifa × posições ${sv.rule && sv.rule.src === 'bins' ? 'bin' : 'pallet'} × quinzenas.`;
+    case 'PEDIDO': return 'Tarifa × número de pedidos.';
+    case 'KIT': return 'Tarifa × número de kits.';
+    default: return `Tarifa × ${qlbl[sv.basis] || 'quantidade de unidades'}${sv.basis === 'CONTAINER' ? ' (ou AWBs/veículos, conforme a operação)' : ''}, multiplicada pelo fator do serviço no agrupamento quando houver.`;
+  }
+}
+function ruleDlg(code) {
+  const sv = svcBy(code); if (!sv) return;
+  const r = curResult(), l = r.lines.find(x => x.svc === code), s = r.sel.find(x => x.svc === code);
+  const kv = (k, v) => `<div class="kv"><span class="muted">${esc(k)}</span><span>${v}</span></div>`;
+  const noCharge = sv.cls === 'NA' || sv.cls === 'NAO_COBRAVEL';
+  const rep = sv.taxGroup === 'repasse', f = rep ? db.settings.fPorto : db.settings.fClif;
+  const steps = noCharge ? [`Não gera cobrança (${esc(CLASSES[sv.cls])}).`] : [
+    esc(basisRuleTxt(sv)),
+    periodRuleTxt(sv.rule) && esc(periodRuleTxt(sv.rule)),
+    'Mínimo: se a tarifa tem valor mínimo, vale o maior entre o valor calculado e o mínimo × base do mínimo (por container, por CI/DUE ou por processo).',
+    rep ? '' : 'IMO e fora do padrão: se a simulação marca a opção e a tarifa tem a taxa, gera uma linha de acréscimo à parte (valor do serviço × taxa). O serviço mantém o valor normal.',
+    'Ajuste manual (com justificativa), quando houver, substitui o valor calculado. Depois aplica o desconto % digitado na proposta.',
+    `Valor com impostos = valor sem impostos ÷ ${num(+f, 4)} (fator ${rep ? 'de repasse do porto' : 'CLIF'}, em Configurações).`,
+  ].filter(Boolean);
+  const lookup = 'A tarifa vem da lista de tarifas por serviço, nesta ordem: tarifa do cliente com container e regime › do cliente com container › geral com regime › geral. Operações sem container usam a tarifa Dry. Se não houver valor, usa a tabela que vale para todos os agrupamentos.';
+  let cur = '';
+  if (l) {
+    cur = `<div class="subh" style="margin-top:14px">Nesta simulação</div>
+      ${kv('Tarifa', esc(rateTxt(l)) + ' ' + stBadge(l.status))}
+      ${kv('Fonte', `<span class="small">${esc(l.src || '—')}</span>`)}
+      ${l.qty != null ? kv('Quantidade', num(l.qty, l.qty % 1 ? 2 : 0)) : ''}
+      ${l.min != null ? kv('Mínimo da tarifa', brl(l.min) + ' ' + esc(MIN_BASES[l.minBasis] || '')) : ''}
+      ${kv('Cálculo', `<span class="small">${esc(l.rule || '—')}</span>`)}
+      ${l.adjusted ? kv('Ajuste manual', `${brl(l.adjusted.value)} <span class="small muted">(original ${brl(l.original)} · ${esc(l.adjusted.just)})</span>`) : ''}
+      ${l.discPct ? kv('Desconto', `${String(l.discPct).replace('.', ',')}% (−${brl(l.discAmt)} sobre ${brl(l.preDisc)})`) : ''}
+      ${kv('Valor sem impostos', l.amount == null ? '<span class="neg">sem valor</span>' : '<b>' + brl(l.amount) + '</b>')}
+      ${l.gross != null ? kv('Valor com impostos', brl(l.gross)) : ''}`;
+  } else if (s && !s.selected) cur = `<p class="muted small" style="margin-top:14px">Este serviço não está incluído na simulação atual.</p>`;
+  else if (s && !s.applicable) cur = `<p class="muted small" style="margin-top:14px">Não se aplica à simulação atual: ${esc(condText(s.cond))}.</p>`;
+  openDialog({ title:'Regra de cálculo: ' + sv.name, wide:true, body:`
+    ${kv('Código', esc(sv.code))}${kv('Categoria', esc(sv.category))}${kv('Classificação', clsBadge(sv.cls))}${kv('Base de cobrança', esc(BASES[sv.basis].label))}${kv('Repasse', rep ? 'Sim' : 'Não')}
+    <div class="subh" style="margin-top:14px">Como é calculado</div>
+    <ol class="small" style="margin:6px 0 0;padding-left:20px;line-height:1.5">${steps.map(x => `<li>${x}</li>`).join('')}</ol>
+    ${noCharge ? '' : `<p class="muted small" style="margin:8px 0 0">${esc(lookup)}</p>`}
+    ${cur}`, actions:[{ label:'Fechar', primary:true }] });
+}
+ACT.svcRule = el => ruleDlg(el.dataset.svc);
 // Desconto %: a cada tecla atualiza o valor da linha e o resumo sem redesenhar a lista (o campo não perde o foco)
 ACT_CHANGE.simDisc = el => {
   if (!sim.disc) sim.disc = {};
@@ -1403,7 +1466,7 @@ PAGES.servicos = { title:'Serviços calculados', sub:'Memória de cálculo da si
       stripe: r => catColor(r.category), onRow: r => adjustDlg(r),
       columns:[
         { k:'ops', label:'', sort:false, html: r => canAddRate(r) ? `<button class="btn sm" style="white-space:nowrap" data-act="calcAddRate" data-svc="${esc(r.svc)}" title="Cadastrar a tarifa deste serviço na tabela e recalcular">${ic('add')} Tarifa</button>` : '' },
-        { k:'name', label:'Serviço', wrap:true, html: r => `<b style="font-weight:500">${esc(r.name)}</b>${r.adjusted ? ' <span class="badge warn">ajustado</span>' : ''}${r.mandatory ? ` <span class="badge mand">${ic('lock')}obrig.</span>` : ''}` },
+        { k:'name', label:'Serviço', wrap:true, html: r => `<b style="font-weight:500">${esc(r.name)}</b> ${svcBy(r.svc) ? ruleBtn(r.svc, r.name) : ''}${r.adjusted ? ' <span class="badge warn">ajustado</span>' : ''}${r.mandatory ? ` <span class="badge mand">${ic('lock')}obrig.</span>` : ''}` },
         { k:'svc', label:'Código', hide:true }, { k:'category', label:'Categoria' },
         { k:'cls', label:'Classificação', html: r => clsBadge(r.cls) },
         { k:'basis', label:'Base', get: r => r.basis === 'COND' ? 'Condicional' : BASES[r.basis].label },
@@ -2129,7 +2192,7 @@ PAGES.catalogo = { title:'Serviços', sub:'Passo 1: cadastro de todos os serviç
       toolbar: `${edit ? `<button class="btn sm pri" data-act="svcNew">${ic('add')} Novo serviço</button>` : ''}<button class="btn sm" data-act="catList">${ic('list')} Categorias</button>`,
       bulk:[{ label:'Ativar', fn: rows => bulkSvc(rows, true) }, { label:'Inativar', fn: rows => bulkSvc(rows, false) }],
       stripe: r => r.active ? (CLS_COLOR[r.cls] || '#6B7280') : '#9CA3AF', onRow: r => svcDlg(r),
-      columns:[{ k:'code', label:'Código', w:'110px' }, { k:'name', label:'Descrição', wrap:true, html: r => `${esc(r.name)}${r.active ? '' : ' <span class="badge mut">inativo</span>'}` },
+      columns:[{ k:'code', label:'Código', w:'110px' }, { k:'name', label:'Descrição', wrap:true, html: r => `${esc(r.name)} ${ruleBtn(r.code, r.name)}${r.active ? '' : ' <span class="badge mut">inativo</span>'}` },
         { k:'category', label:'Categoria' },
         { k:'cls', label:'Classificação', get: r => CLASSES[r.cls], html: r => edit ? `<select data-act-change="svcCls" data-code="${r.code}" aria-label="Classificação">${Object.entries(CLASSES).map(([k, l]) => `<option value="${k}" ${r.cls === k ? 'selected' : ''}>${l}</option>`).join('')}</select>` : clsBadge(r.cls) },
         { k:'basis', label:'Base de cobrança', get: r => BASES[r.basis].label, html: r => edit ? `<select data-act-change="svcBasis" data-code="${r.code}" aria-label="Base de cobrança">${Object.entries(BASES).map(([k, v]) => `<option value="${k}" ${r.basis === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select>` : esc(BASES[r.basis].label) },
