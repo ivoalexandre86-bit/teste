@@ -91,7 +91,7 @@ svg.i{width:20px;height:20px;fill:currentColor;flex:none}
 .f{display:flex;flex-direction:column;gap:4px;min-width:0}
 .f > label,.lbl{font-size:12px;color:var(--muted);font-weight:500}
 .f .hint{font-size:12px;color:var(--muted)}
-input[type=text],input[type=number],input[type=search],input[type=date],select,textarea{width:100%;background:var(--input);border:1px solid var(--input-line);border-radius:12px;padding:9px 12px;min-height:40px;outline:none}
+input[type=text],input[type=number],input[type=search],input[type=date],input[type=email],input[type=tel],select,textarea{width:100%;background:var(--input);border:1px solid var(--input-line);border-radius:12px;padding:9px 12px;min-height:40px;outline:none}
 .f{min-width:0}select{max-width:100%;text-overflow:ellipsis}
 textarea{min-height:72px;resize:vertical}
 input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
@@ -2393,20 +2393,28 @@ PAGES.clientes = { title:'Clientes e regras', sub:'Entidades e tabelas por clien
       filters:[{ k:'role', label:'Papel', get: r => r.roles.join('|'), opts: [] }].slice(0, 0),
       toolbar: edit ? `<button class="btn sm pri" data-act="entityNew">${ic('add')} Nova entidade</button>` : '',
       stripe: r => r.roles.includes('Cliente') ? '#2457D6' : r.roles.includes('Concorrente') ? '#B45309' : '#15803D', onRow: r => entityDlg(r),
-      columns:[{ k:'id', label:'ID', w:'110px' }, { k:'name', label:'Nome', wrap:true }, { k:'roles', label:'Papéis', get: r => r.roles.join(', '), html: r => r.roles.map(x => `<span class="badge">${esc(x)}</span>`).join(' ') },
+      columns:[{ k:'id', label:'ID', w:'110px' }, { k:'name', label:'Nome', wrap:true }, { k:'city', label:'Município', get: r => r.city || '' }, { k:'uf', label:'UF', get: r => r.uf || '' }, { k:'email', label:'E-mail de contato', get: r => r.email || '', html: r => r.email ? `<a href="mailto:${esc(r.email)}">${esc(r.email)}</a>` : '' }, { k:'phone', label:'Telefone', get: r => r.phone || '' }, { k:'roles', label:'Papéis', get: r => r.roles.join(', '), html: r => r.roles.map(x => `<span class="badge">${esc(x)}</span>`).join(' ') },
         { k:'tables', label:'Tarifas', num:true, get: r => ((db.tables.find(t => t.id === MASTER_TABLE) || { entries:[] }).entries.filter(e => e.cust === r.id)).length }, { k:'note', label:'Observação', wrap:true }] })}`;
   } };
 ACT.entityNew = () => entityDlg(null);
+const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 function entityDlg(e) {
   const edit = can('tarifas'), ro = edit ? '' : 'disabled'; const R = ['Provedor','Entidade comercial','Concorrente','Cliente','Repasse'];
-  openDialog({ title: e ? e.name : 'Nova entidade', body:`<div class="fg"><div class="f"><label>ID</label><input type="text" name="id" value="${esc(e ? e.id : '')}" ${e ? 'disabled' : ro}></div><div class="f" style="grid-column:span 2"><label>Nome</label><input type="text" name="name" value="${esc(e ? e.name : '')}" ${ro}></div></div>
+  openDialog({ title: e ? e.name : 'Nova entidade', body:`<div class="fg"><div class="f"><label>ID</label><input type="text" name="id" value="${esc(e ? e.id : '')}" ${e ? 'disabled' : ro}></div><div class="f" style="grid-column:span 2"><label>Nome</label><input type="text" name="name" value="${esc(e ? e.name : '')}" ${ro}></div>
+      <div class="f" style="grid-column:span 2"><label>Município</label><input type="text" name="city" value="${esc(e && e.city || '')}" ${ro}></div>
+      <div class="f"><label>UF</label><select name="uf" ${ro}><option value="">—</option>${UFS.map(u => `<option ${e && e.uf === u ? 'selected' : ''}>${u}</option>`).join('')}</select></div>
+      <div class="f" style="grid-column:span 2"><label>E-mail de contato</label><input type="email" name="email" value="${esc(e && e.email || '')}" placeholder="nome@empresa.com.br" ${ro}></div>
+      <div class="f"><label>Telefone</label><input type="tel" name="phone" value="${esc(e && e.phone || '')}" placeholder="(47) 99999-0000" ${ro}></div></div>
     <div class="subh">Papéis</div><div class="row">${R.map(x => `<label class="chk"><input type="checkbox" name="r_${x}" ${e && e.roles.includes(x) ? 'checked' : ''} ${ro}> ${x}</label>`).join('')}</div>
     <div class="f" style="margin-top:12px"><label>Observação</label><textarea name="note" ${ro}>${esc(e ? e.note : '')}</textarea></div>`,
     actions: edit ? [{ label:'Cancelar' }, { label:'Salvar', primary:true, fn: b => {
       const id = e ? e.id : val(b, 'id').trim().toUpperCase().replace(/\s+/g, '-'), name = val(b, 'name').trim(), roles = R.filter(x => val(b, 'r_' + x));
       if (!id || !name) { toast('ID e nome são obrigatórios.'); return false; } if (!roles.length) { toast('Escolha ao menos um papel.'); return false; }
       if (!e && entBy(id)) { toast('ID já existe.'); return false; }
-      if (e) Object.assign(e, { name, roles, note: val(b, 'note') }); else db.entities.push({ id, name, roles, note: val(b, 'note') });
+      const contact = { city: val(b, 'city').trim(), uf: val(b, 'uf'), email: val(b, 'email').trim(), phone: val(b, 'phone').trim() };
+      if (contact.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email)) { toast('E-mail de contato inválido.'); return false; }
+      if (contact.phone && !/^[\d\s()+.-]{8,20}$/.test(contact.phone)) { toast('Telefone inválido: use só números, espaços, parênteses, + ou -.'); return false; }
+      if (e) Object.assign(e, { name, roles, note: val(b, 'note'), ...contact }); else db.entities.push({ id, name, roles, note: val(b, 'note'), ...contact });
       audit(e ? 'Entidade editada' : 'Entidade criada', id, name + ' · ' + roles.join(', ')); persist(); rerenderPage();
     } }] : [{ label:'Fechar' }] });
 }
