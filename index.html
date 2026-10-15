@@ -226,7 +226,7 @@ details.cols.acts .menu .btn{display:flex;width:100%;justify-content:flex-start;
 .hbar{display:grid;grid-template-columns:minmax(0,170px) 1fr auto;gap:8px;align-items:center;font-size:13px;margin:6px 0}
 .hbar .tr{height:10px;border-radius:999px;background:var(--g-line);overflow:hidden}
 .hbar .tr i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--g-neon),var(--g-neon2))}
-.cols.lkk{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}.cols.lkk .card{margin-top:0}.lkc{text-align:left;font:inherit;color:inherit;cursor:pointer;width:100%;transition:transform .12s,box-shadow .12s,opacity .12s}.lkc:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.15)}.lkc:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.lkk.hasf .lkc{opacity:.6}.lkk.hasf .lkc.on{opacity:1;outline:2px solid var(--accent);outline-offset:-1px}
+.cols.lkk{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}.cols.lkk .card{margin-top:0}.lkc{text-align:left;font:inherit;color:inherit;cursor:pointer;width:100%;transition:transform .12s,box-shadow .12s,opacity .12s}.lkc:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.15)}.lkc:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.lkk.hasf .lkc{opacity:.6}.lkk.hasf .lkc.on{opacity:1;outline:2px solid var(--accent);outline-offset:-1px}
 .hbar .lb{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* ---------- simulador (visual limpo) ---------- */
 .simpage{--accent:#0F766E;--accent-fg:#fff;--accent-soft:rgba(15,118,110,.10);--hero1:#0F766E;--hero2:#115E59}
@@ -2182,12 +2182,30 @@ function impLogGrid() {
 }
 
 // ---------- Catálogo de serviços ----------
+// KPIs da tela 1: um card por categoria (mais o total); clicar filtra o grid pela categoria, clicar de novo ou no total limpa
+function catKpisHTML() {
+  const rows = db.services, cur = (GS.cat && GS.cat.f.category) || '';
+  const by = {}; for (const r of rows) (by[r.category] = by[r.category] || []).push(r);
+  const cats = [...new Set([...db.categories.map(c => c.name), ...Object.keys(by)])].filter(c => by[c]);
+  const det = rs => { const i = rs.filter(r => !r.active).length, e = rs.filter(r => r.cls === 'EXTRA' || r.cls === 'ADICIONAL').length; return `${rs.length - i} ativo(s)${i ? ' · ' + i + ' inativo(s)' : ''}${e ? ' · ' + e + ' extra/adic.' : ''}`; };
+  const kpi = (l, v, d, color, cat) => `<button type="button" class="card kpi lkc${cat === cur ? ' on' : ''}" data-act="catKpi" data-cat="${esc(cat)}" aria-pressed="${cat === cur}" title="${cat && cat !== cur ? 'Filtrar o grid por ' + esc(l) : 'Mostrar todas as categorias'}" style="${color ? `border-top:3px solid ${color}` : ''}"><div class="l">${color ? `<span class="dot" style="background:${color}"></span>` : ''}${esc(l)}</div><div class="v">${v}</div><div class="d">${d}</div></button>`;
+  return `<div class="cols lkk${cur ? ' hasf' : ''}">${kpi('Total de serviços', rows.length, det(rows), '', '')}${cats.map(c => kpi(c, by[c].length, det(by[c]), catColor(c), c)).join('')}</div>`;
+}
+const refreshCatKpis = () => { const k = document.getElementById('cat-kpis'); if (k) k.innerHTML = catKpisHTML(); };
+ACT.catKpi = el => {
+  if (!GS.cat) return; const c = el.dataset.cat, v = !c || GS.cat.f.category === c ? '' : c;
+  GS.cat.f.category = v; GS.cat.page = 0;
+  const sel = document.querySelector('[data-gf="cat"][data-k="category"]'); if (sel) sel.value = v;
+  gridRefresh('cat'); refreshCatKpis();
+};
+document.addEventListener('change', e => { if (e.target.dataset && e.target.dataset.gf === 'cat') refreshCatKpis(); });
 const usedIn = code => ({ groups: new Set(db.links.filter(l => l.svc === code).map(l => l.group)).size, tables: ((db.tables.find(t => t.id === MASTER_TABLE) || { entries:[] }).entries.filter(e => e.svc === code)).length });
 PAGES.catalogo = { title:'Serviços', sub:'Passo 1: cadastro de todos os serviços (classificação e base de cobrança)',
   render() {
     const edit = can('catalogo');
     return `${edit ? '' : noPerm('o catálogo')}
     <p class="muted" style="margin-top:0">A <b>classificação</b> diz como o serviço se comporta na proposta (padrão, extra, não cobrável…). A <b>base de cobrança</b> diz o que multiplica a tarifa (container, % do CIF, processo…). São campos separados.</p>
+    <div id="cat-kpis" style="margin-bottom:16px">${catKpisHTML()}</div>
     ${gridHTML({ id:'cat', select: edit, key: r => r.code, rows: () => db.services, pageSize:20, placeholder:'Pesquisar código ou descrição',
       filters:[{ k:'grp', label:'Agrupamento', match: (r, v) => v === '__none' ? !db.links.some(l => l.svc === r.code) : db.links.some(l => l.svc === r.code && l.group === v), opts: [...db.groups.map(g => [g.id, g.id + ' · ' + g.name]), ['__none', 'Sem agrupamento']] }, { k:'category', label:'Categoria', get: r => r.category, opts: CATEGORIES.map(c => [c, c]) }, { k:'rep', label:'Repasse', get: r => r.taxGroup === 'repasse' ? 'repasse' : 'clif', opts:[['repasse','Repasse: sim'],['clif','Repasse: não']] }, { k:'cls', label:'Classificação', get: r => r.cls, opts: Object.entries(CLASSES) }, { k:'basis', label:'Base', get: r => r.basis, opts: Object.entries(BASES).map(([k, v]) => [k, v.label]) }, { k:'active', label:'Situação', get: r => r.active ? '1' : '0', opts:[['1','Ativos'],['0','Inativos']] }],
       toolbar: `${edit ? `<button class="btn sm pri" data-act="svcNew">${ic('add')} Novo serviço</button>` : ''}<button class="btn sm" data-act="catList">${ic('list')} Categorias</button>`,
@@ -2210,7 +2228,7 @@ function setRepasse(s, rep) {
   if (n) toast(s.code + ' agora é repasse: taxas IMO e fora do padrão removidas de ' + n + ' tarifa(s).');
 }
 ACT_CHANGE.svcRep = el => { setRepasse(svcBy(el.dataset.code), el.value === 'repasse'); persist(); };
-ACT_CHANGE.svcCls = el => { const s = svcBy(el.dataset.code); const old = s.cls; s.cls = el.value; audit('Classificação alterada', s.code, CLASSES[old] + ' → ' + CLASSES[s.cls]); persist(); toast(s.code + ': ' + CLASSES[s.cls]); };
+ACT_CHANGE.svcCls = el => { const s = svcBy(el.dataset.code); const old = s.cls; s.cls = el.value; audit('Classificação alterada', s.code, CLASSES[old] + ' → ' + CLASSES[s.cls]); persist(); refreshCatKpis(); toast(s.code + ': ' + CLASSES[s.cls]); };
 ACT_CHANGE.svcBasis = el => { const s = svcBy(el.dataset.code); const old = s.basis; if (BASES[old].pct !== BASES[el.value].pct) toast('Atenção: mudar entre base percentual e valor fixo muda o significado das tarifas cadastradas.'); s.basis = el.value; audit('Base alterada', s.code, BASES[old].label + ' → ' + BASES[s.basis].label); persist(); };
 function bulkSvc(rows, on) {
   const inUse = on ? [] : rows.filter(r => usedIn(r.code).groups);
