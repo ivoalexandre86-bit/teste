@@ -226,6 +226,7 @@ details.cols.acts .menu .btn{display:flex;width:100%;justify-content:flex-start;
 .hbar{display:grid;grid-template-columns:minmax(0,170px) 1fr auto;gap:8px;align-items:center;font-size:13px;margin:6px 0}
 .hbar .tr{height:10px;border-radius:999px;background:var(--g-line);overflow:hidden}
 .hbar .tr i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--g-neon),var(--g-neon2))}
+.cols.lkk{grid-template-columns:repeat(4,minmax(0,1fr))}.cols.lkk .card{margin-top:0}@media (max-width:900px){.cols.lkk{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .hbar .lb{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* ---------- simulador (visual limpo) ---------- */
 .simpage{--accent:#0F766E;--accent-fg:#fff;--accent-soft:rgba(15,118,110,.10);--hero1:#0F766E;--hero2:#115E59}
@@ -2326,10 +2327,11 @@ PAGES.vinculos = { title:'Serviços por agrupamento', sub:'Passo 3: um agrupamen
     const g = grpBy(gid);
     const sid = ui.linkSvc && svcBy(ui.linkSvc) ? ui.linkSvc : '';
     return `${edit ? '' : noPerm('os vínculos')}
-    <div class="card"><div class="fg"><div class="f" style="grid-column:1/-1"><label for="lk-g">Agrupamento</label><select id="lk-g" data-act-change="linkGroup" style="min-width:min(380px,100%)"><option value="">Todos os agrupamentos</option>${db.groups.map(x => `<option value="${x.id}" ${gid === x.id ? 'selected' : ''}>${esc(x.id + ' · ' + x.name)}${x.active ? '' : ' (inativo)'}</option>`).join('')}</select></div>
+    <div class="card fcard ${isFold('lk:filtros') ? 'folded' : ''}" data-fold="lk:filtros"><h2>${ic('tune')} Filtros<span class="foldsum">${esc(g ? g.id + ' · ' + g.name : 'Todos os agrupamentos')} · ${esc(sid ? sid + ' · ' + svcBy(sid).name : 'Todos os serviços')}</span><span class="sp"></span>${foldBtn('lk:filtros', 'filtros')}</h2><div class="cbody"><div class="fg"><div class="f" style="grid-column:1/-1"><label for="lk-g">Agrupamento</label><select id="lk-g" data-act-change="linkGroup" style="min-width:min(380px,100%)"><option value="">Todos os agrupamentos</option>${db.groups.map(x => `<option value="${x.id}" ${gid === x.id ? 'selected' : ''}>${esc(x.id + ' · ' + x.name)}${x.active ? '' : ' (inativo)'}</option>`).join('')}</select></div>
       <div class="f" style="grid-column:1/-1"><label for="lk-s">Serviço</label><select id="lk-s" data-act-change="linkSvc" style="min-width:min(380px,100%)"><option value="">Todos os serviços</option>${db.services.map(x => `<option value="${x.code}" ${sid === x.code ? 'selected' : ''}>${esc(x.code + ' · ' + x.name)}${x.active ? '' : ' (inativo)'}</option>`).join('')}</select></div></div>
-      <p class="muted small" style="margin-bottom:0">Cada linha liga um serviço a um agrupamento. <b>Padrão</b>: já vem marcado na proposta. <b>Obrigatório</b>: não pode ser desmarcado. Os valores vêm da lista de Tarifas, buscados pelo serviço.</p></div>
-    <div style="margin-top:16px">${gridHTML({ id:'links', select: edit, rows: () => (gid ? groupLinks(db, gid) : db.links.slice().sort((a, b) => a.group.localeCompare(b.group) || a.order - b.order)).filter(l => !sid || l.svc === sid), pageSize:50, placeholder:'Pesquisar serviço ou agrupamento',
+      <p class="muted small" style="margin-bottom:0">Cada linha liga um serviço a um agrupamento. <b>Padrão</b>: já vem marcado na proposta. <b>Obrigatório</b>: não pode ser desmarcado. Os valores vêm da lista de Tarifas, buscados pelo serviço.</p></div></div>
+    <div id="lk-kpis" style="margin-top:16px">${linkKpisHTML()}</div>
+    <div style="margin-top:16px">${gridHTML({ id:'links', select: edit, rows: linkRows, pageSize:50, placeholder:'Pesquisar serviço ou agrupamento',
       filters:[{ k:'cat', label:'Categoria', get: r => (svcBy(r.svc) || {}).category, opts: CATEGORIES.map(c => [c, c]) }, { k:'act', label:'Situação', get: r => r.active ? '1' : '0', opts:[['1','Ativos'],['0','Inativos']] }],
       toolbar: edit ? `<button class="btn sm pri" data-act="linkAdd">${ic('add')} Vincular serviços</button><button class="btn sm${!gid && sid ? ' pri' : ''}" data-act="linkAddGroups">${ic('add')} Vincular agrupamentos ao serviço</button>${gid ? `<button class="btn sm" data-act="linkCopy">Copiar de outro agrupamento</button>` : ''}` : '',
       bulk:[{ label:'Marcar padrão', fn: rows => bulkLink(rows, 'def', true) }, { label:'Tirar padrão', fn: rows => bulkLink(rows, 'def', false) }, { label:'Ativar', fn: rows => bulkLink(rows, 'active', true) }, { label:'Inativar', fn: rows => bulkLink(rows, 'active', false) }, { label:'Desvincular', fn: rows => unlink(rows) }],
@@ -2345,9 +2347,26 @@ PAGES.vinculos = { title:'Serviços por agrupamento', sub:'Passo 3: um agrupamen
         { k:'active', label:'Ativo', sort:false, html: r => `<input type="checkbox" data-act-change="linkField" data-id="${esc(r.id)}" data-k="active" ${r.active ? 'checked' : ''} ${ro} aria-label="Ativo">` },
         { k:'ops', label:'', sort:false, html: r => edit ? `<span style="display:inline-flex;gap:2px"><button class="iconbtn" data-act="linkMove" data-id="${esc(r.id)}" data-d="-1" title="Subir" aria-label="Subir">${ic('up')}</button><button class="iconbtn" data-act="linkMove" data-id="${esc(r.id)}" data-d="1" title="Descer" aria-label="Descer">${ic('down')}</button><button class="iconbtn" data-act="linkDel" data-id="${esc(r.id)}" title="Desvincular" aria-label="Desvincular">${ic('close')}</button></span>` : '' }] })}</div>`;
   } };
+// Vínculos visíveis com os filtros de agrupamento e serviço (base do grid e dos KPIs)
+function linkRows() {
+  const gid = ui.linkGroup && grpBy(ui.linkGroup) ? ui.linkGroup : '', sid = ui.linkSvc && svcBy(ui.linkSvc) ? ui.linkSvc : '';
+  return (gid ? groupLinks(db, gid) : db.links.slice().sort((a, b) => a.group.localeCompare(b.group) || a.order - b.order)).filter(l => !sid || l.svc === sid);
+}
+// KPIs da tela 3: totais dos vínculos filtrados (agrupamento/serviço) e distribuição por categoria
+function linkKpisHTML() {
+  const rows = linkRows(), n = rows.length, cnt = f => rows.filter(f).length;
+  const groups = new Set(rows.map(r => r.group)).size, svcs = new Set(rows.map(r => r.svc)).size;
+  const act = cnt(r => r.active), def = cnt(r => r.def), mand = cnt(r => r.mandatory), pc = x => n ? Math.round(x / n * 100) + '%' : '—';
+  const kpi = (l, v, d, cls) => `<div class="card kpi"><div class="l">${l}</div><div class="v ${cls || ''}">${v}</div>${d ? `<div class="d">${d}</div>` : ''}</div>`;
+  const byCat = {}; for (const r of rows) { const c = (svcBy(r.svc) || {}).category || '—'; byCat[c] = (byCat[c] || 0) + 1; }
+  const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]), max = Math.max(1, ...cats.map(c => c[1]));
+  return `<div class="cols lkk">${kpi('Vínculos', n, groups + ' agrupamento(s) · ' + svcs + ' serviço(s)')}${kpi('Padrão', def, pc(def) + ' dos vínculos')}${kpi('Obrigatórios', mand, pc(mand) + ' dos vínculos')}${kpi('Ativos', act, (n - act) + ' inativo(s)', n - act ? '' : 'pos')}</div>
+    ${cats.length ? `<div class="card" style="margin-top:16px"><h2 style="margin-bottom:6px">Vínculos por categoria</h2>${cats.map(([c, v]) => `<div class="hbar"><span class="lb" title="${esc(c)}"><span class="dot" style="background:${catColor(c)}"></span>${esc(c)}</span><span class="tr"><i style="width:${v / max * 100}%;background:${catColor(c)}"></i></span><span class="num">${v}</span></div>`).join('')}</div>` : ''}`;
+}
+const refreshLinkKpis = () => { const k = document.getElementById('lk-kpis'); if (k) k.innerHTML = linkKpisHTML(); };
 ACT_CHANGE.linkSvc = el => { ui.linkSvc = el.value; if (GS.links) { GS.links.sel.clear(); GS.links.page = 0; } persist(); rerenderPage(); };
 ACT_CHANGE.linkGroup = el => { ui.linkGroup = el.value; if (GS.links) { GS.links.sel.clear(); GS.links.page = 0; } persist(); rerenderPage(); };
-ACT_CHANGE.linkField = el => { const l = linkBy(el.dataset.id); const k = el.dataset.k; l[k] = k === 'mult' ? Math.max(1, +el.value || 1) : el.checked; if (k === 'mandatory' && el.checked) l.def = true; audit('Vínculo alterado', l.id, k + '=' + l[k]); persist(); gridRefresh('links'); };
+ACT_CHANGE.linkField = el => { const l = linkBy(el.dataset.id); const k = el.dataset.k; l[k] = k === 'mult' ? Math.max(1, +el.value || 1) : el.checked; if (k === 'mandatory' && el.checked) l.def = true; audit('Vínculo alterado', l.id, k + '=' + l[k]); persist(); gridRefresh('links'); refreshLinkKpis(); };
 ACT_CHANGE.linkCond = el => { if (el.value === 'custom') return; const l = linkBy(el.dataset.id); l.cond = COND_PRESETS[el.value] ? clone(COND_PRESETS[el.value]) : null; audit('Condição do vínculo', l.id, condText(l.cond) || 'Sempre'); persist(); gridRefresh('links'); };
 function renumber(gid) { groupLinks(db, gid).forEach((l, i) => { l.order = i + 1; }); }
 ACT.linkMove = el => { const l = linkBy(el.dataset.id); const ls = groupLinks(db, l.group); const i = ls.indexOf(l), j = i + +el.dataset.d; if (j < 0 || j >= ls.length) return; [ls[i].order, ls[j].order] = [ls[j].order, ls[i].order]; persist(); gridRefresh('links'); };
