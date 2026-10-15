@@ -55,7 +55,11 @@ svg.i{width:20px;height:20px;fill:currentColor;flex:none}
 .side hr.in{margin:8px 12px}
 .nav{flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 0}
 .nav .sec{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8A939C;padding:10px 22px 4px;white-space:nowrap}
-.app.collapsed .nav .sec{visibility:hidden;height:8px;padding:0}
+.nav .sec{display:flex;align-items:center;width:100%;border:0;background:transparent;cursor:pointer;text-align:left;font-family:inherit;font-weight:500;margin-top:4px}
+.nav .sec span{flex:1}.nav .sec .chv{width:16px;height:16px;transform:rotate(90deg);transition:transform .15s;opacity:.7}
+.nav .sec:hover{color:#fff}.nav .sec:focus-visible{outline:2px solid #7DA2FF;outline-offset:-2px}
+.navgrp.folded .sec .chv{transform:rotate(0deg)}.navgrp.folded .navitems{display:none}
+.app.collapsed .nav .sec{visibility:hidden;height:8px;padding:0}.app.collapsed .navgrp.folded .navitems{display:block}
 .nav a{display:flex;align-items:center;gap:14px;height:44px;margin:2px 8px;padding:0 14px;border-radius:6px;color:var(--side-fg);text-decoration:none;font-size:15px;white-space:nowrap;cursor:pointer}
 .nav a:hover{background:rgba(255,255,255,.05)}
 .nav a.on{background:rgba(255,255,255,.10);color:#fff;font-weight:600}
@@ -849,7 +853,7 @@ const catName = id => (db.categories.find(c => c.id === id) || {}).name || id;
 const catColor = name => (db.categories.find(c => c.name === name) || {}).color || (name === 'ADICIONAL' ? '#C62828' : '#6B7280');
 let sim = Object.assign(clone(DEFAULT_SIM), lsGet(LS.sim) || {});
 sim.table = MASTER_TABLE; sim.peacao = false; // campo retirado da tela (pedido do Ivo); não pode ficar ligado sem aparecer // v9: a simulação sempre busca na lista de tarifas por serviço
-let ui = Object.assign({ page:'painel', collapsed: window.innerWidth < 760, theme:null, tableId:'', groupId:'G-DMEC', linkGroup:'', linkSvc:'', cmpDim:'tabelas', cmpPick:null }, lsGet(LS.ui) || {});
+let ui = Object.assign({ page:'simulador', collapsed: window.innerWidth < 760, theme:null, tableId:'', groupId:'G-DMEC', linkGroup:'', linkSvc:'', cmpDim:'tabelas', cmpPick:null }, lsGet(LS.ui) || {});
 if (window.innerWidth < 760) ui.collapsed = true;
 function persist() { lsSet(LS.db, db); lsSet(LS.sim, sim); lsSet(LS.ui, ui); }
 
@@ -1051,12 +1055,14 @@ function pickServices({ title, exclude = [], filter = () => true, onPick, hint }
 }
 
 // ---------- casca: menu lateral + topo ----------
+// Simulação é a primeira seção do menu (pedido do Ivo); o Painel fica nela, ao final
 const NAV = [
-  ['', [['painel','dash','Painel']]],
+  ['Simulação', [['simulador','calc','Simulador / Proposta'],['servicos','receipt','Serviços calculados'],['comparativo','compare','Comparativo'],['cenarios','layers','Cenários'],['historico','history','Histórico'],['painel','dash','Painel']]],
   ['Cadastros', [['catalogo','list','1 · Serviços'],['agrupamentos','tree','2 · Agrupamentos'],['vinculos','link','3 · Serviços por agrupamento'],['tabelas','table','4 · Tarifas'],['importacao','upload','Importação Excel'],['clientes','people','Clientes e regras']]],
-  ['Simulação', [['simulador','calc','Simulador / Proposta'],['servicos','receipt','Serviços calculados'],['comparativo','compare','Comparativo'],['cenarios','layers','Cenários'],['historico','history','Histórico']]],
   ['Sistema', [['config','tune','Configurações']]],
 ];
+// seções do menu recolhíveis: clicar no título recolhe/expande; estado guardado em ui.navFold
+const navFolded = sec => !!(ui.navFold && ui.navFold[sec]);
 const PAGES = {};
 function applyTheme() { if (ui.theme) document.documentElement.setAttribute('data-theme', ui.theme); else document.documentElement.removeAttribute('data-theme'); }
 const isDark = () => ui.theme ? ui.theme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -1069,7 +1075,7 @@ function render() {
     <aside class="side" aria-label="Menu principal">
       <div class="brand"><span class="av">${ic('truck')}</span><b>Simulador CLIF</b><button class="iconbtn" data-act="toggleNav" title="${ui.collapsed ? 'Expandir menu' : 'Recolher menu'}" aria-label="${ui.collapsed ? 'Expandir menu' : 'Recolher menu'}">${ic('menu')}</button></div>
       <hr>
-      <nav class="nav">${NAV.map(([sec, items]) => `${sec ? `<div class="sec">${sec}</div>` : ''}${items.map(([id, icn, label]) => `<a data-go="${id}" class="${ui.page === id ? 'on' : ''}" title="${esc(label)}" ${ui.page === id ? 'aria-current="page"' : ''}>${ic(icn)}<span>${esc(label)}</span></a>`).join('')}`).join('')}</nav>
+      <nav class="nav">${NAV.map(([sec, items]) => `<div class="navgrp${navFolded(sec) ? ' folded' : ''}">${sec ? `<button type="button" class="sec" data-act="navSec" data-sec="${esc(sec)}" aria-expanded="${!navFolded(sec)}" title="${navFolded(sec) ? 'Expandir' : 'Recolher'} ${esc(sec)}"><span>${sec}</span>${ic('chev', 'i chv')}</button>` : ''}<div class="navitems">${items.map(([id, icn, label]) => `<a data-go="${id}" class="${ui.page === id ? 'on' : ''}" title="${esc(label)}" ${ui.page === id ? 'aria-current="page"' : ''}>${ic(icn)}<span>${esc(label)}</span></a>`).join('')}</div></div>`).join('')}</nav>
       <hr><div class="foot"><div class="who" title="${esc(userName())}">${ic('user')}<span>${esc(ROLES[db.settings.role])}</span></div></div>
     </aside>
     <main class="main">
@@ -1084,6 +1090,8 @@ function rerenderPage() { const P = PAGES[ui.page]; const el = document.getEleme
 // ações por delegação: data-act="nome" (clique) e data-act-change="nome" (alteração)
 const ACT = {
   toggleNav() { ui.collapsed = !ui.collapsed; persist(); render(); },
+  navSec(el) { const k = el.dataset.sec; ui.navFold = ui.navFold || {}; if (ui.navFold[k]) delete ui.navFold[k]; else ui.navFold[k] = 1; persist();
+    const g = el.closest('.navgrp'); if (g) g.classList.toggle('folded', navFolded(k)); el.setAttribute('aria-expanded', String(!navFolded(k))); el.title = (navFolded(k) ? 'Expandir ' : 'Recolher ') + k; },
   theme() { ui.theme = isDark() ? 'light' : 'dark'; persist(); render(); },
 };
 const ACT_CHANGE = {
