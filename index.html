@@ -226,7 +226,7 @@ details.cols.acts .menu .btn{display:flex;width:100%;justify-content:flex-start;
 .hbar{display:grid;grid-template-columns:minmax(0,170px) 1fr auto;gap:8px;align-items:center;font-size:13px;margin:6px 0}
 .hbar .tr{height:10px;border-radius:999px;background:var(--g-line);overflow:hidden}
 .hbar .tr i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--g-neon),var(--g-neon2))}
-.cols.lkk{grid-template-columns:repeat(4,minmax(0,1fr))}.cols.lkk .card{margin-top:0}@media (max-width:900px){.cols.lkk{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.cols.lkk{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}.cols.lkk .card{margin-top:0}
 .hbar .lb{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* ---------- simulador (visual limpo) ---------- */
 .simpage{--accent:#0F766E;--accent-fg:#fff;--accent-soft:rgba(15,118,110,.10);--hero1:#0F766E;--hero2:#115E59}
@@ -2352,16 +2352,15 @@ function linkRows() {
   const gid = ui.linkGroup && grpBy(ui.linkGroup) ? ui.linkGroup : '', sid = ui.linkSvc && svcBy(ui.linkSvc) ? ui.linkSvc : '';
   return (gid ? groupLinks(db, gid) : db.links.slice().sort((a, b) => a.group.localeCompare(b.group) || a.order - b.order)).filter(l => !sid || l.svc === sid);
 }
-// KPIs da tela 3: totais dos vínculos filtrados (agrupamento/serviço) e distribuição por categoria
+// KPIs da tela 3: um card por categoria com os vínculos filtrados (agrupamento/serviço), mais o total
 function linkKpisHTML() {
-  const rows = linkRows(), n = rows.length, cnt = f => rows.filter(f).length;
-  const groups = new Set(rows.map(r => r.group)).size, svcs = new Set(rows.map(r => r.svc)).size;
-  const act = cnt(r => r.active), def = cnt(r => r.def), mand = cnt(r => r.mandatory), pc = x => n ? Math.round(x / n * 100) + '%' : '—';
-  const kpi = (l, v, d, cls) => `<div class="card kpi"><div class="l">${l}</div><div class="v ${cls || ''}">${v}</div>${d ? `<div class="d">${d}</div>` : ''}</div>`;
-  const byCat = {}; for (const r of rows) { const c = (svcBy(r.svc) || {}).category || '—'; byCat[c] = (byCat[c] || 0) + 1; }
-  const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]), max = Math.max(1, ...cats.map(c => c[1]));
-  return `<div class="cols lkk">${kpi('Vínculos', n, groups + ' agrupamento(s) · ' + svcs + ' serviço(s)')}${kpi('Padrão', def, pc(def) + ' dos vínculos')}${kpi('Obrigatórios', mand, pc(mand) + ' dos vínculos')}${kpi('Ativos', act, (n - act) + ' inativo(s)', n - act ? '' : 'pos')}</div>
-    ${cats.length ? `<div class="card" style="margin-top:16px"><h2 style="margin-bottom:6px">Vínculos por categoria</h2>${cats.map(([c, v]) => `<div class="hbar"><span class="lb" title="${esc(c)}"><span class="dot" style="background:${catColor(c)}"></span>${esc(c)}</span><span class="tr"><i style="width:${v / max * 100}%;background:${catColor(c)}"></i></span><span class="num">${v}</span></div>`).join('')}</div>` : ''}`;
+  const rows = linkRows(), n = rows.length;
+  const byCat = {}; for (const r of rows) { const c = (svcBy(r.svc) || {}).category || '—'; (byCat[c] = byCat[c] || []).push(r); }
+  const order = [...db.categories.map(c => c.name), ...Object.keys(byCat)];
+  const cats = [...new Set(order)].filter(c => byCat[c]);
+  const det = rs => { const m = rs.filter(r => r.mandatory).length, d = rs.filter(r => r.def).length, i = rs.filter(r => !r.active).length; return `${d} padrão · ${m} obrig.${i ? ' · ' + i + ' inativo(s)' : ''}`; };
+  const kpi = (l, v, d, color) => `<div class="card kpi" style="${color ? `border-top:3px solid ${color}` : ''}"><div class="l">${color ? `<span class="dot" style="background:${color}"></span>` : ''}${esc(l)}</div><div class="v">${v}</div><div class="d">${d}</div></div>`;
+  return `<div class="cols lkk">${kpi('Total de vínculos', n, new Set(rows.map(r => r.group)).size + ' agrupamento(s) · ' + new Set(rows.map(r => r.svc)).size + ' serviço(s)')}${cats.map(c => kpi(c, byCat[c].length, det(byCat[c]), catColor(c))).join('')}</div>`;
 }
 const refreshLinkKpis = () => { const k = document.getElementById('lk-kpis'); if (k) k.innerHTML = linkKpisHTML(); };
 ACT_CHANGE.linkSvc = el => { ui.linkSvc = el.value; if (GS.links) { GS.links.sel.clear(); GS.links.page = 0; } persist(); rerenderPage(); };
