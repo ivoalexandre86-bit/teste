@@ -226,7 +226,7 @@ details.cols.acts .menu .btn{display:flex;width:100%;justify-content:flex-start;
 .hbar{display:grid;grid-template-columns:minmax(0,170px) 1fr auto;gap:8px;align-items:center;font-size:13px;margin:6px 0}
 .hbar .tr{height:10px;border-radius:999px;background:var(--g-line);overflow:hidden}
 .hbar .tr i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--g-neon),var(--g-neon2))}
-.cols.lkk{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}.cols.lkk .card{margin-top:0}
+.cols.lkk{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}.cols.lkk .card{margin-top:0}.lkc{text-align:left;font:inherit;color:inherit;cursor:pointer;width:100%;transition:transform .12s,box-shadow .12s,opacity .12s}.lkc:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.15)}.lkc:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.lkk.hasf .lkc{opacity:.6}.lkk.hasf .lkc.on{opacity:1;outline:2px solid var(--accent);outline-offset:-1px}
 .hbar .lb{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* ---------- simulador (visual limpo) ---------- */
 .simpage{--accent:#0F766E;--accent-fg:#fff;--accent-soft:rgba(15,118,110,.10);--hero1:#0F766E;--hero2:#115E59}
@@ -2359,10 +2359,20 @@ function linkKpisHTML() {
   const order = [...db.categories.map(c => c.name), ...Object.keys(byCat)];
   const cats = [...new Set(order)].filter(c => byCat[c]);
   const det = rs => { const m = rs.filter(r => r.mandatory).length, d = rs.filter(r => r.def).length, i = rs.filter(r => !r.active).length; return `${d} padrão · ${m} obrig.${i ? ' · ' + i + ' inativo(s)' : ''}`; };
-  const kpi = (l, v, d, color) => `<div class="card kpi" style="${color ? `border-top:3px solid ${color}` : ''}"><div class="l">${color ? `<span class="dot" style="background:${color}"></span>` : ''}${esc(l)}</div><div class="v">${v}</div><div class="d">${d}</div></div>`;
-  return `<div class="cols lkk">${kpi('Total de vínculos', n, new Set(rows.map(r => r.group)).size + ' agrupamento(s) · ' + new Set(rows.map(r => r.svc)).size + ' serviço(s)')}${cats.map(c => kpi(c, byCat[c].length, det(byCat[c]), catColor(c))).join('')}</div>`;
+  const cur = (GS.links && GS.links.f.cat) || '';
+  // card clicável: filtra o grid pela categoria; clicar de novo (ou no total) limpa o filtro
+  const kpi = (l, v, d, color, cat) => `<button type="button" class="card kpi lkc${cat === cur ? ' on' : ''}" data-act="lkCat" data-cat="${esc(cat)}" aria-pressed="${cat === cur}" title="${cat ? (cat === cur ? 'Mostrar todas as categorias' : 'Filtrar o grid por ' + esc(l)) : 'Mostrar todas as categorias'}" style="${color ? `border-top:3px solid ${color}` : ''}"><div class="l">${color ? `<span class="dot" style="background:${color}"></span>` : ''}${esc(l)}</div><div class="v">${v}</div><div class="d">${d}</div></button>`;
+  return `<div class="cols lkk${cur ? ' hasf' : ''}">${kpi('Total de vínculos', n, new Set(rows.map(r => r.group)).size + ' agrupamento(s) · ' + new Set(rows.map(r => r.svc)).size + ' serviço(s)', '', '')}${cats.map(c => kpi(c, byCat[c].length, det(byCat[c]), catColor(c), c)).join('')}</div>`;
 }
 const refreshLinkKpis = () => { const k = document.getElementById('lk-kpis'); if (k) k.innerHTML = linkKpisHTML(); };
+ACT.lkCat = el => {
+  if (!GS.links) return; const c = el.dataset.cat, v = !c || GS.links.f.cat === c ? '' : c;
+  GS.links.f.cat = v; GS.links.page = 0;
+  const sel = document.querySelector('[data-gf="links"][data-k="cat"]'); if (sel) sel.value = v;
+  gridRefresh('links'); refreshLinkKpis();
+};
+// filtro Categoria do grid mudado à mão: destaca o card correspondente
+document.addEventListener('change', e => { if (e.target.dataset && e.target.dataset.gf === 'links') refreshLinkKpis(); });
 ACT_CHANGE.linkSvc = el => { ui.linkSvc = el.value; if (GS.links) { GS.links.sel.clear(); GS.links.page = 0; } persist(); rerenderPage(); };
 ACT_CHANGE.linkGroup = el => { ui.linkGroup = el.value; if (GS.links) { GS.links.sel.clear(); GS.links.page = 0; } persist(); rerenderPage(); };
 ACT_CHANGE.linkField = el => { const l = linkBy(el.dataset.id); const k = el.dataset.k; l[k] = k === 'mult' ? Math.max(1, +el.value || 1) : el.checked; if (k === 'mandatory' && el.checked) l.def = true; audit('Vínculo alterado', l.id, k + '=' + l[k]); persist(); gridRefresh('links'); refreshLinkKpis(); };
